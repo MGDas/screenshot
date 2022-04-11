@@ -1,0 +1,48 @@
+version: '3.5'
+
+services:
+  redis:
+    container_name: redis
+    image: redis:6-alpine
+
+  db:
+    image: postgres:13-alpine
+    ports:
+      - 5432:5432
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    environment:
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_DB=screenshot
+
+  screenshot:
+    build: .
+    volumes:
+      - .:/usr/src/screenshot/
+    ports:
+      - 5000:5000
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/screenshot
+      - CELERY_BROKER_URL=redis://redis:6379
+      - CELERY_RESULT_BACKEND=redis://redis:6379
+    depends_on:
+      - db
+    entrypoint: ./init.sh
+
+  celery:
+    container_name: celery
+    build: .
+    volumes:
+      - .:/usr/src/screenshot/
+    command: celery --app app.tasks.celery worker --loglevel=info
+    environment:
+      - DATABASE_URL=postgresql+psycopg2://postgres:postgres@db:5432/screenshot
+      - CELERY_BROKER_URL=redis://redis:6379
+      - CELERY_RESULT_BACKEND=redis://redis:6379
+    depends_on:
+      - redis
+
+
+volumes:
+  postgres_data:
